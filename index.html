@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>🎯 Jeu de Fléchettes - Mode Serpent Emojis</title>
+<title>🎯 Jeu de Fléchettes - Mode Serpent Complet</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -44,34 +44,22 @@
     height: min(7vw,70px);
     border-radius: 8px;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     font-weight: bold;
-    font-size: 14px;
+    font-size: 13px;
     position: relative;
+    text-align: center;
   }
 
   /* Couleurs cases */
   .neutre { background: #dfffea; }
-  .bonus { background: #8fd6ff; animation: pulse 1.5s infinite alternate; }
-  .malus { background: #ff6f6f; color: #fff; animation: shake 1.2s infinite alternate; }
+  .bonus { background: #8fd6ff; }
+  .malus { background: #ff6f6f; color: #fff; }
   .teleport { background: #ffd280; }
   .defi { background: #dab4fc; }
-  .attack { background: #fff176; animation: pulseAttack 1s infinite alternate; }
-
-  /* Animation cases spéciales */
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    100% { transform: scale(1.05); }
-  }
-  @keyframes pulseAttack {
-    0% { box-shadow: 0 0 5px #fff176; }
-    100% { box-shadow: 0 0 15px #fff176; }
-  }
-  @keyframes shake {
-    0% { transform: rotate(-1deg); }
-    100% { transform: rotate(1deg); }
-  }
+  .attack { background: #fff176; }
 
   /* Zone joueurs (multi-emoji) */
   .player-slot {
@@ -94,12 +82,10 @@
   #score-panel h2 {
     margin: 0 0 10px;
   }
-  #score-panel input {
-    width: 80px;
-    padding: 6px;
-    font-size: 16px;
-    text-align: center;
-    margin: 10px 0;
+  #score-panel select {
+    width: 100%;
+    padding: 4px;
+    margin-bottom: 8px;
   }
   #score-panel button {
     padding: 8px 15px;
@@ -108,6 +94,15 @@
     border: none;
     border-radius: 6px;
     cursor: pointer;
+  }
+
+  #bareme {
+    margin-top:10px;
+    text-align:left;
+    font-size:14px;
+    background:#f7f7f7;
+    padding:8px;
+    border-radius:6px;
   }
 
   #log {
@@ -163,11 +158,17 @@
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
   }
+
+  /* Icône d'effet sur les cases spéciales */
+  .effect-icon {
+    font-size: 16px;
+    margin-top: 3px;
+  }
 </style>
 </head>
 <body>
 
-<h1>🎯 Jeu de Fléchettes - Mode Serpent (Emojis)</h1>
+<h1>🎯 Jeu de Fléchettes - Mode Serpent Complet</h1>
 
 <div id="start-screen">
   <label>Nombre de joueurs (2-6):
@@ -185,9 +186,23 @@
 
   <div id="score-panel">
     <h2 id="status">🎯 Tour</h2>
-    <label>Score du tir :</label><br>
-    <input type="number" id="scoreInput" min="0" max="60"><br>
+    
+    <label>Fléchette 1 :</label><br>
+    <select id="d1"></select><br>
+    <label>Fléchette 2 :</label><br>
+    <select id="d2"></select><br>
+    <label>Fléchette 3 :</label><br>
+    <select id="d3"></select><br>
     <button onclick="validateScore()">Valider</button>
+    
+    <div id="bareme">
+      <strong>🎯 Barème de déplacement (3 fléchettes) :</strong><br>
+      • 0 à 30 pts → avance <strong>1 case</strong><br>
+      • 31 à 60 pts → avance <strong>2 cases</strong><br>
+      • 61 à 100 pts → avance <strong>3 cases</strong><br>
+      • 101 à 150 pts → avance <strong>4 cases</strong>
+    </div>
+
     <div id="log"></div>
   </div>
 </div>
@@ -210,10 +225,9 @@ let pendingEffect = null;
 let boardCases = [];
 let mustSucceedDefi = {};
 
-// Emojis uniques par joueur
 const playerEmojis = ["🔴","🔵","🟢","🟣","🟠","🟡"];
 
-// Types de cases
+// Types de cases et icône
 function getCaseType(i) {
   if ([3,21].includes(i)) return "bonus";
   if ([25,59].includes(i)) return "malus";
@@ -222,8 +236,32 @@ function getCaseType(i) {
   if ([12,50].includes(i)) return "attack";
   return "neutre";
 }
+function getEffectIcon(type){
+  switch(type){
+    case "bonus": return "✅";
+    case "malus": return "❌";
+    case "teleport": return "🌀";
+    case "defi": return "🎯";
+    case "attack": return "⚔️";
+    default: return "";
+  }
+}
 
-// Config joueurs
+// Générer les options de score réalistes
+function fillScoreSelects(){
+  const vals = [0,...Array.from({length:20},(_,i)=>i+1),25,50];
+  const selects = [document.getElementById("d1"),document.getElementById("d2"),document.getElementById("d3")];
+  selects.forEach(sel=>{
+    sel.innerHTML="";
+    vals.forEach(v=>{
+      let opt = document.createElement("option");
+      opt.value=v;
+      opt.textContent=v;
+      sel.appendChild(opt);
+    });
+  });
+}
+
 function generatePlayerInputs() {
   let num = parseInt(document.getElementById("numPlayers").value);
   let container = document.getElementById("playerNames");
@@ -241,6 +279,7 @@ function startGame() {
     players.push({name:name, pos:1, emoji: playerEmojis[i-1]});
     mustSucceedDefi[name]=false;
   }
+  fillScoreSelects();
   document.getElementById("start-screen").style.display = "none";
   document.getElementById("game-container").style.display = "flex";
   createSerpentBoard();
@@ -259,7 +298,7 @@ function restartGame(){
   updateStatus();
 }
 
-// Plateau mode serpent
+// Plateau serpent avec icône d’effet
 function createSerpentBoard(){
   const board = document.getElementById("board");
   board.innerHTML = "";
@@ -275,7 +314,8 @@ function createSerpentBoard(){
 
       let div = document.createElement("div");
       div.className = `case ${type}`;
-      div.innerHTML = count;
+      let icon = getEffectIcon(type);
+      div.innerHTML = count + (icon ? `<div class="effect-icon">${icon}</div>` : "");
       rowCells.push(div);
       count++;
     }
@@ -286,18 +326,13 @@ function createSerpentBoard(){
 
 // Affichage multi-emojis sur une case
 function drawPlayers(){
-  // Clear les anciens joueurs
   document.querySelectorAll(".player-slot").forEach(e=>e.remove());
-
   const allCases = document.getElementById("board").children;
-
-  // Regrouper les joueurs par case
   let grouped = {};
   players.forEach(p=>{
     if(!grouped[p.pos]) grouped[p.pos]=[];
     grouped[p.pos].push(p.emoji);
   });
-
   Object.keys(grouped).forEach(pos=>{
     let idx = parseInt(pos)-1;
     let caseDiv = allCases[idx];
@@ -319,24 +354,27 @@ function updateStatus(){
 }
 
 function validateScore(){
-  let score = parseInt(document.getElementById("scoreInput").value);
-  if(isNaN(score)||score<0||score>60){alert("Score invalide !");return;}
-  processTurn(score);
+  let s1 = parseInt(document.getElementById("d1").value) || 0;
+  let s2 = parseInt(document.getElementById("d2").value) || 0;
+  let s3 = parseInt(document.getElementById("d3").value) || 0;
+  let total = s1+s2+s3;
+  processTurn(total);
 }
 
-function getAdvance(score){
-  if(score<=10) return 1;
-  if(score<=20) return 2;
-  if(score<=40) return 3;
+// Barème pour 3 fléchettes (max 150)
+function getAdvance(total){
+  if(total <= 30) return 1;
+  if(total <= 60) return 2;
+  if(total <= 100) return 3;
   return 4;
 }
 
-function processTurn(score){
+function processTurn(total){
   let p = players[currentPlayerIndex];
 
   if(mustSucceedDefi[p.name]){
-    if(score<10){
-      log(`${p.name} échoue le défi (<10 pts) → reste bloqué`);
+    if(total<30){
+      log(`${p.name} échoue le défi (<30 pts total) → reste bloqué`);
       mustSucceedDefi[p.name]=false;
       nextPlayer();
       return;
@@ -346,10 +384,10 @@ function processTurn(score){
     }
   }
 
-  let advance = getAdvance(score);
+  let advance = getAdvance(total);
   p.pos += advance;
   if(p.pos>NUM_CELLS) p.pos = NUM_CELLS;
-  log(`${p.name} avance de ${advance} cases → case ${p.pos}`);
+  log(`${p.name} a fait ${total} pts → avance de ${advance} cases → case ${p.pos}`);
 
   if(p.pos===NUM_CELLS){
     showPopup("🏆 Victoire",`Bravo ${p.name} a gagné la partie !`,()=>{});
@@ -391,14 +429,14 @@ function handleSpecial(player,type){
       });
       break;
     case "defi":
-      showPopup("🎯 Défi précision","Au prochain tour, tu dois faire au moins 10 points ou rester bloqué !",()=>{
+      showPopup("🎯 Défi précision","Au prochain tour, tu dois faire au moins 30 points (sur 3 fléchettes) ou rester bloqué !",()=>{
         mustSucceedDefi[player.name]=true;
         drawPlayers();
         nextPlayer();
       });
       break;
     case "attack":
-      showPopup("🎯 Attaque !","Choisis un adversaire et lance une fléchette pour le faire reculer.",()=>{
+      showPopup("⚔️ Attaque !","Choisis un adversaire et lance 1 fléchette pour le faire reculer.",()=>{
         triggerAttack(player);
       });
       break;
@@ -411,8 +449,7 @@ function triggerAttack(player){
   let targetName = prompt("Qui veux-tu attaquer ? ("+names+")");
   let target = opponents.find(o=>o.name===targetName);
   if(!target){ nextPlayer(); return; }
-  let s = parseInt(prompt("Score de ton tir d'attaque ?"));
-  if(isNaN(s)){ nextPlayer(); return; }
+  let s = parseInt(prompt("Score de ton tir d'attaque (0,1-20,25,50) ?")) || 0;
   let recule=1;
   if(s>10 && s<=20) recule=2;
   else if(s>20 && s<=40) recule=3;
