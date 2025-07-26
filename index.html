@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>🎯 Jeu de Fléchettes Spirale</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: radial-gradient(circle, #111, #000);
+    color: #fff;
+    text-align: center;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  #start-screen {
+    margin-top: 50px;
+  }
+
+  #spiral-board {
+    position: relative;
+    width: 800px;
+    height: 800px;
+    margin: 30px auto;
+    border-radius: 50%;
+  }
+
+  .case {
+    position: absolute;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 45px;
+    font-weight: bold;
+    color: #fff;
+    font-size: 14px;
+    box-shadow: 0 0 5px rgba(255,255,255,0.3);
+    transition: transform 0.3s;
+  }
+
+  /* Types de cases */
+  .bonus { background: #4cafef; animation: pulse 1s infinite alternate; }
+  .malus { background: #e74c3c; animation: shake 0.8s infinite alternate; }
+  .teleport { background: #f39c12; }
+  .defi { background: #9b59b6; }
+  .attack { background: #f1c40f; animation: pulseAttack 1s infinite alternate; }
+  .neutre { background: #2ecc71; }
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.1); }
+  }
+  @keyframes pulseAttack {
+    0% { box-shadow: 0 0 5px #f1c40f; }
+    100% { box-shadow: 0 0 20px #f1c40f; }
+  }
+  @keyframes shake {
+    0% { transform: rotate(-2deg); }
+    100% { transform: rotate(2deg); }
+  }
+
+  .player-token {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    position: absolute;
+    border: 2px solid #fff;
+  }
+
+  #controls {
+    margin: 10px auto;
+  }
+
+  #log {
+    max-width: 600px;
+    margin: 20px auto;
+    background: rgba(0,0,0,0.4);
+    padding: 10px;
+    border-radius: 8px;
+    text-align: left;
+    height: 150px;
+    overflow-y: auto;
+  }
+
+  /* Popup explicative */
+  #popup {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+  }
+  .popup-content {
+    background: #fff;
+    color: #000;
+    padding: 20px;
+    border-radius: 10px;
+    width: 300px;
+    text-align: center;
+    animation: popIn 0.3s ease-out;
+  }
+  .popup-content h2 { margin-top: 0; }
+  .popup-content button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    background: #333;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  @keyframes popIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  #restart-btn {
+    margin-top: 10px;
+    padding: 8px 15px;
+    background: #27ae60;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  #playerNames input {
+    margin: 5px;
+    padding: 5px;
+  }
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+  <h1>🎯 Jeu de Fléchettes Spirale</h1>
+  <label>Nombre de joueurs (2-6): 
+    <input type="number" id="numPlayers" min="2" max="6" value="2">
+  </label>
+  <div id="playerNames"></div>
+  <button onclick="generatePlayerInputs()">Configurer les joueurs</button>
+  <button onclick="startGame()">Démarrer la partie</button>
+</div>
+
+<div id="game-screen" style="display:none;">
+  <h2 id="status"></h2>
+  <div id="spiral-board"></div>
+  <div id="controls">
+    <label>Score du tir : <input type="number" id="scoreInput" min="0" max="60"></label>
+    <button onclick="validateScore()">Valider</button>
+  </div>
+  <div id="log"></div>
+</div>
+
+<!-- Popup -->
+<div id="popup">
+  <div class="popup-content">
+    <h2 id="popup-title"></h2>
+    <p id="popup-message"></p>
+    <button onclick="closePopup()">OK</button>
+    <button id="restart-btn" style="display:none;" onclick="restartGame()">Rejouer</button>
+  </div>
+</div>
+
+<!-- Sons en base64 intégrés -->
+<audio id="sound-bonus" src="data:audio/mpeg;base64,SUQzAwAAAAAAH1RYWFgAAAAZAAAAU29..."></audio>
+<audio id="sound-malus" src="data:audio/mpeg;base64,SUQzAwAAA..."></audio>
+<audio id="sound-attack" src="data:audio/mpeg;base64,SUQzAwAAA..."></audio>
+<audio id="sound-teleport" src="data:audio/mpeg;base64,SUQzAwAAA..."></audio>
+
+<script>
+/* === Variables === */
+const NUM_CELLS = 60;
+let players = [];
+let currentPlayerIndex = 0;
+let pendingEffect = null;
+let boardCases = [];
+let mustSucceedDefi = {}; // clé = joueur.name, valeur = true/false
+
+function getCaseType(i) {
+  if ([3,21].includes(i)) return "bonus";
+  if ([25,59].includes(i)) return "malus";
+  if ([40].includes(i)) return "teleport";
+  if ([10,15,33].includes(i)) return "defi";
+  if ([12,50].includes(i)) return "attack";
+  return "neutre";
+}
+
+/* === Joueurs === */
+function generatePlayerInputs() {
+  let num = parseInt(document.getElementById("numPlayers").value);
+  let container = document.getElementById("playerNames");
+  container.innerHTML = "";
+  for (let i=1; i<=num; i++) {
+    container.innerHTML += `<div><label>Nom joueur ${i} : <input type="text" id="playerName${i}" value="Joueur${i}"></label></div>`;
+  }
+}
+
+function startGame() {
+  let num = parseInt(document.getElementById("numPlayers").value);
+  players = [];
+  for (let i=1; i<=num; i++) {
+    let name = document.getElementById("playerName"+i).value || "Joueur"+i;
+    players.push({name:name, pos:1, color:getRandomColor()});
+    mustSucceedDefi[name]=false;
+  }
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("game-screen").style.display = "block";
+  createSpiralBoard();
+  drawPlayers();
+  updateStatus();
+}
+
+function restartGame(){
+  document.getElementById("popup").style.display="none";
+  document.getElementById("restart-btn").style.display="none";
+  // Réinitialise positions
+  players.forEach(p=>{p.pos=1; mustSucceedDefi[p.name]=false;});
+  currentPlayerIndex=0;
+  createSpiralBoard();
+  drawPlayers();
+  document.getElementById("log").innerHTML="";
+  updateStatus();
+}
+
+/* === Utils === */
+function getRandomColor(){
+  const colors = ["#ff4757","#1e90ff","#2ed573","#ffa502","#3742fa","#ff6348"];
+  return colors[Math.floor(Math.random()*colors.length)];
+}
+
+/* === Plateau spirale === */
+function createSpiralBoard() {
+  let board = document.getElementById("spiral-board");
+  board.innerHTML = "";
+  boardCases = [];
+  const centerX = 400, centerY = 400;
+  let angle = 0;
+  let radius = 60;
+  for (let i=1;i<=NUM_CELLS;i++) {
+    let x = centerX + radius * Math.cos(angle) - 22;
+    let y = centerY + radius * Math.sin(angle) - 22;
+    let type = getCaseType(i);
+    boardCases.push(type);
+    let div = document.createElement("div");
+    div.className = `case ${type}`;
+    div.textContent = i;
+    div.style.left = `${x}px`;
+    div.style.top = `${y}px`;
+    board.appendChild(div);
+    angle += 0.45;
+    radius += 2.5/ (2*Math.PI);
+  }
+}
+
+function drawPlayers() {
+  document.querySelectorAll(".player-token").forEach(e=>e.remove());
+  let board = document.getElementById("spiral-board");
+  const centerX = 400, centerY = 400;
+  let angle = 0; let radius = 60;
+  let coords = {};
+  for (let i=1;i<=NUM_CELLS;i++){
+    let x = centerX + radius*Math.cos(angle);
+    let y = centerY + radius*Math.sin(angle);
+    coords[i] = {x,y};
+    angle += 0.45;
+    radius += 2.5/(2*Math.PI);
+  }
+  players.forEach(p=>{
+    let token = document.createElement("div");
+    token.className="player-token";
+    token.style.background=p.color;
+    let c = coords[p.pos];
+    token.style.left = (c.x-10)+"px";
+    token.style.top = (c.y-10)+"px";
+    board.appendChild(token);
+  });
+}
+
+/* === Tour === */
+function updateStatus(){
+  let p = players[currentPlayerIndex];
+  document.getElementById("status").textContent = `🎯 Au tour de ${p.name}`;
+}
+
+function validateScore(){
+  let score = parseInt(document.getElementById("scoreInput").value);
+  if(isNaN(score)||score<0||score>60){alert("Score invalide !");return;}
+  processTurn(score);
+}
+
+function getAdvance(score){
+  if(score<=10) return 1;
+  if(score<=20) return 2;
+  if(score<=40) return 3;
+  return 4;
+}
+
+function processTurn(score){
+  let p = players[currentPlayerIndex];
+
+  // Vérif défi en attente
+  if(mustSucceedDefi[p.name]){
+    if(score<10){
+      log(`${p.name} échoue le défi (<10 pts) → reste bloqué ce tour`);
+      mustSucceedDefi[p.name]=false;
+      nextPlayer();
+      return;
+    } else {
+      log(`${p.name} réussit le défi !`);
+      mustSucceedDefi[p.name]=false;
+    }
+  }
+
+  let advance = getAdvance(score);
+  p.pos += advance;
+  if(p.pos>NUM_CELLS) p.pos = NUM_CELLS;
+  log(`${p.name} avance de ${advance} cases → case ${p.pos}`);
+
+  if(p.pos===NUM_CELLS){
+    showPopup("🏆 Victoire",`Bravo ${p.name} a gagné la partie !`,()=>{});
+    document.getElementById("restart-btn").style.display="inline-block";
+    return;
+  }
+
+  let type = boardCases[p.pos-1];
+  if(type!=="neutre"){
+    handleSpecial(p,type);
+  } else {
+    drawPlayers();
+    nextPlayer();
+  }
+}
+
+function handleSpecial(player,type){
+  switch(type){
+    case "bonus":
+      playSound("sound-bonus");
+      showPopup("🎉 Bonus","Avance de 2 cases supplémentaires !",()=>{
+        player.pos+=2;
+        if(player.pos>NUM_CELLS) player.pos=NUM_CELLS;
+        drawPlayers();
+        nextPlayer();
+      });
+      break;
+    case "malus":
+      playSound("sound-malus");
+      showPopup("💥 Malus","Recule de 5 cases !",()=>{
+        player.pos=Math.max(1,player.pos-5);
+        drawPlayers();
+        nextPlayer();
+      });
+      break;
+    case "teleport":
+      playSound("sound-teleport");
+      showPopup("🌀 Téléportation","Tu es transporté à la case 50 !",()=>{
+        player.pos=50;
+        drawPlayers();
+        nextPlayer();
+      });
+      break;
+    case "defi":
+      playSound("sound-bonus");
+      showPopup("🎯 Défi précision","Au prochain tour, tu dois faire au moins 10 points ou tu restes bloqué !",()=>{
+        mustSucceedDefi[player.name]=true;
+        drawPlayers();
+        nextPlayer();
+      });
+      break;
+    case "attack":
+      playSound("sound-attack");
+      showPopup("🎯 Attaque !","Choisis un adversaire et lance une fléchette pour le faire reculer.",()=>{
+        triggerAttack(player);
+      });
+      break;
+  }
+}
+
+function triggerAttack(player){
+  let opponents = players.filter(p=>p!==player);
+  let names = opponents.map(o=>o.name).join(", ");
+  let targetName = prompt("Qui veux-tu attaquer ? ("+names+")");
+  let target = opponents.find(o=>o.name===targetName);
+  if(!target){ nextPlayer(); return; }
+  let s = parseInt(prompt("Score de ton tir d'attaque ?"));
+  if(isNaN(s)){ nextPlayer(); return; }
+  let recule=1;
+  if(s>10 && s<=20) recule=2;
+  else if(s>20 && s<=40) recule=3;
+  else if(s>40) recule=4;
+  target.pos=Math.max(1,target.pos-recule);
+  log(`${player.name} attaque ${target.name} → recule de ${recule} cases !`);
+  drawPlayers();
+  nextPlayer();
+}
+
+function nextPlayer(){
+  currentPlayerIndex=(currentPlayerIndex+1)%players.length;
+  updateStatus();
+}
+
+/* === Popup === */
+function showPopup(title,message,callback){
+  document.getElementById("popup-title").textContent=title;
+  document.getElementById("popup-message").textContent=message;
+  document.getElementById("popup").style.display="flex";
+  pendingEffect=callback;
+}
+function closePopup(){
+  document.getElementById("popup").style.display="none";
+  if(pendingEffect) pendingEffect();
+  pendingEffect=null;
+}
+
+/* === Logs === */
+function log(msg){
+  document.getElementById("log").innerHTML+=msg+"<br>";
+  document.getElementById("log").scrollTop=document.getElementById("log").scrollHeight;
+}
+
+/* === Sounds === */
+function playSound(id){
+  document.getElementById(id).play();
+}
+</script>
+</body>
+</html>
