@@ -2,77 +2,81 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>🎯 Jeu de Fléchettes Spirale</title>
+<title>🎯 Jeu de Fléchettes - Mode Serpent</title>
 <style>
   body {
     font-family: Arial, sans-serif;
-    background: #f8f9fa;
+    background: #f9f9f9;
     color: #333;
-    text-align: center;
     margin: 0;
+    text-align: center;
   }
 
   h1 {
-    margin-top: 10px;
+    margin: 20px 0;
   }
 
   #game-container {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    gap: 20px;
-    margin-top: 20px;
+    gap: 30px;
+    margin: 20px;
   }
 
-  #spiral-board {
-    position: relative;
-    width: 900px;
-    height: 900px;
-    background: radial-gradient(circle at center, #ffffff 50%, #f0f0f0 100%);
-    border-radius: 50%;
+  #board-container {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+
+  #board {
+    display: grid;
+    grid-template-rows: repeat(6, 60px);
+    grid-template-columns: repeat(10, 60px);
+    gap: 5px;
   }
 
   .case {
-    position: absolute;
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    text-align: center;
-    line-height: 38px;
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     font-weight: bold;
-    font-size: 13px;
-    color: #333;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: transform 0.3s;
+    font-size: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
   }
 
   /* Couleurs des cases */
-  .neutre { background: #b5f7c8; }
-  .bonus { background: #77ddff; animation: pulse 1.5s infinite alternate; }
-  .malus { background: #ff7676; animation: shake 1s infinite alternate; color: #fff; }
+  .neutre { background: #dfffea; color: #333; }
+  .bonus { background: #8fd6ff; animation: pulse 1.5s infinite alternate; }
+  .malus { background: #ff6f6f; color: #fff; animation: shake 1.2s infinite alternate; }
   .teleport { background: #ffd280; }
-  .defi { background: #d6b4fc; }
+  .defi { background: #dab4fc; }
   .attack { background: #fff176; animation: pulseAttack 1s infinite alternate; }
 
   @keyframes pulse {
     0% { transform: scale(1); }
-    100% { transform: scale(1.15); }
+    100% { transform: scale(1.1); }
   }
   @keyframes pulseAttack {
     0% { box-shadow: 0 0 5px #fff176; }
     100% { box-shadow: 0 0 15px #fff176; }
   }
   @keyframes shake {
-    0% { transform: rotate(-2deg); }
-    100% { transform: rotate(2deg); }
+    0% { transform: rotate(-1deg); }
+    100% { transform: rotate(1deg); }
   }
 
   .player-token {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    position: absolute;
     border: 2px solid #fff;
+    position: absolute;
   }
 
   #score-panel {
@@ -158,7 +162,7 @@
 </head>
 <body>
 
-<h1>🎯 Jeu de Fléchettes en Spirale</h1>
+<h1>🎯 Jeu de Fléchettes - Mode Serpent</h1>
 
 <div id="start-screen">
   <label>Nombre de joueurs (2-6):
@@ -170,7 +174,9 @@
 </div>
 
 <div id="game-container" style="display:none;">
-  <div id="spiral-board"></div>
+  <div id="board-container">
+    <div id="board"></div>
+  </div>
 
   <div id="score-panel">
     <h2 id="status">🎯 Tour</h2>
@@ -191,12 +197,6 @@
   </div>
 </div>
 
-<!-- Sons encodés (extraits libres, base64 raccourcis ici) -->
-<audio id="sound-bonus" src="data:audio/wav;base64,UklGRlQAAABXQVZFZm10..."></audio>
-<audio id="sound-malus" src="data:audio/wav;base64,UklGR..."></audio>
-<audio id="sound-attack" src="data:audio/wav;base64,UklGR..."></audio>
-<audio id="sound-teleport" src="data:audio/wav;base64,UklGR..."></audio>
-
 <script>
 const NUM_CELLS = 60;
 let players = [];
@@ -215,7 +215,7 @@ function getCaseType(i) {
   return "neutre";
 }
 
-/* Config joueurs */
+/* Génération joueurs */
 function generatePlayerInputs() {
   let num = parseInt(document.getElementById("numPlayers").value);
   let container = document.getElementById("playerNames");
@@ -235,7 +235,7 @@ function startGame() {
   }
   document.getElementById("start-screen").style.display = "none";
   document.getElementById("game-container").style.display = "flex";
-  createSpiralBoard();
+  createSerpentBoard();
   drawPlayers();
   updateStatus();
 }
@@ -245,63 +245,64 @@ function restartGame(){
   document.getElementById("restart-btn").style.display="none";
   players.forEach(p=>{p.pos=1; mustSucceedDefi[p.name]=false;});
   currentPlayerIndex=0;
-  createSpiralBoard();
+  createSerpentBoard();
   drawPlayers();
   document.getElementById("log").innerHTML="";
   updateStatus();
 }
 
-/* Utils */
 function getRandomColor(){
   const colors = ["#ff4757","#1e90ff","#2ed573","#ffa502","#3742fa","#ff6348"];
   return colors[Math.floor(Math.random()*colors.length)];
 }
 
-/* Plateau spirale aérée */
-function createSpiralBoard() {
-  let board = document.getElementById("spiral-board");
+/* Création plateau mode serpent */
+function createSerpentBoard(){
+  const board = document.getElementById("board");
   board.innerHTML = "";
   boardCases = [];
-  const centerX = 450, centerY = 450;
-  let angle = 0;
-  let radius = 150;
-  for (let i=1;i<=NUM_CELLS;i++) {
-    let x = centerX + radius * Math.cos(angle) - 19;
-    let y = centerY + radius * Math.sin(angle) - 19;
-    let type = getCaseType(i);
-    boardCases.push(type);
-    let div = document.createElement("div");
-    div.className = `case ${type}`;
-    div.textContent = i;
-    div.style.left = `${x}px`;
-    div.style.top = `${y}px`;
-    board.appendChild(div);
-    angle += 0.35;     // espacement angulaire
-    radius += 6;       // espacement radial plus large
+  let rows = 6;
+  let cols = 10;
+
+  let count = 1;
+  for(let r=0; r<rows; r++){
+    let rowCells = [];
+    for(let c=0; c<cols; c++){
+      let type = getCaseType(count);
+      boardCases.push(type);
+
+      let div = document.createElement("div");
+      div.className = `case ${type}`;
+      div.textContent = count;
+      rowCells.push(div);
+      count++;
+    }
+    // serpent : inverser une ligne sur deux
+    if(r%2===1) rowCells.reverse();
+    rowCells.forEach(cell => board.appendChild(cell));
   }
 }
 
-function drawPlayers() {
+/* Affichage des pions */
+function drawPlayers(){
   document.querySelectorAll(".player-token").forEach(e=>e.remove());
-  let board = document.getElementById("spiral-board");
-  const centerX = 450, centerY = 450;
-  let angle = 0; let radius = 150;
-  let coords = {};
-  for (let i=1;i<=NUM_CELLS;i++){
-    let x = centerX + radius*Math.cos(angle);
-    let y = centerY + radius*Math.sin(angle);
-    coords[i] = {x,y};
-    angle += 0.35;
-    radius += 6;
-  }
+  // chaque case est dans #board.children[index]
   players.forEach(p=>{
-    let token = document.createElement("div");
-    token.className="player-token";
-    token.style.background=p.color;
-    let c = coords[p.pos];
-    token.style.left = (c.x-10)+"px";
-    token.style.top = (c.y-10)+"px";
-    board.appendChild(token);
+    let idx = p.pos-1;
+    let targetCase = document.getElementById("board").children[idx];
+    if(targetCase){
+      let token = document.createElement("div");
+      token.className="player-token";
+      token.style.background=p.color;
+      token.style.position="absolute";
+      token.style.width="20px";
+      token.style.height="20px";
+      token.style.borderRadius="50%";
+      token.style.border="2px solid #fff";
+      token.style.transform="translate(20px,20px)";
+      targetCase.style.position="relative";
+      targetCase.appendChild(token);
+    }
   });
 }
 
@@ -326,7 +327,7 @@ function getAdvance(score){
 
 function processTurn(score){
   let p = players[currentPlayerIndex];
-  // Vérif défi en attente
+  // Vérif défi
   if(mustSucceedDefi[p.name]){
     if(score<10){
       log(`${p.name} échoue le défi (<10 pts) → reste bloqué`);
@@ -359,7 +360,6 @@ function processTurn(score){
 function handleSpecial(player,type){
   switch(type){
     case "bonus":
-      playSound("sound-bonus");
       showPopup("🎉 Bonus","Avance de 2 cases supplémentaires !",()=>{
         player.pos+=2;
         if(player.pos>NUM_CELLS) player.pos=NUM_CELLS;
@@ -368,7 +368,6 @@ function handleSpecial(player,type){
       });
       break;
     case "malus":
-      playSound("sound-malus");
       showPopup("💥 Malus","Recule de 5 cases !",()=>{
         player.pos=Math.max(1,player.pos-5);
         drawPlayers();
@@ -376,7 +375,6 @@ function handleSpecial(player,type){
       });
       break;
     case "teleport":
-      playSound("sound-teleport");
       showPopup("🌀 Téléportation","Tu es transporté à la case 50 !",()=>{
         player.pos=50;
         drawPlayers();
@@ -384,7 +382,6 @@ function handleSpecial(player,type){
       });
       break;
     case "defi":
-      playSound("sound-bonus");
       showPopup("🎯 Défi précision","Au prochain tour, tu dois faire au moins 10 points ou rester bloqué !",()=>{
         mustSucceedDefi[player.name]=true;
         drawPlayers();
@@ -392,7 +389,6 @@ function handleSpecial(player,type){
       });
       break;
     case "attack":
-      playSound("sound-attack");
       showPopup("🎯 Attaque !","Choisis un adversaire et lance une fléchette pour le faire reculer.",()=>{
         triggerAttack(player);
       });
@@ -440,11 +436,6 @@ function closePopup(){
 function log(msg){
   document.getElementById("log").innerHTML+=msg+"<br>";
   document.getElementById("log").scrollTop=document.getElementById("log").scrollHeight;
-}
-
-/* Sounds */
-function playSound(id){
-  document.getElementById(id).play();
 }
 </script>
 </body>
